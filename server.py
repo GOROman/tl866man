@@ -27,6 +27,7 @@ CANCEL_EVENT = None
 ACTIVE_PROCESS = None
 ACTIVE_PROCESS_LOCK = threading.Lock()
 SC88_CHIP = "AM27C4096@DIP40"
+SC88_ROT180_PROFILE_NAME = "SC-88Pro PRG LH538U0P-ROT180 DIP40"
 BANK_SIZE = 512 * 1024
 HSP_PROFILE_NAME = "HSP-08-0 PRG · LH2310 / DIP-28"
 DEFAULT_SPEED = "normal"
@@ -91,6 +92,7 @@ HSP_PROFILE = {
 PROFILES = {HSP_PROFILE_NAME: HSP_PROFILE}
 CUSTOM_MINIPRO = ROOT / ".runtime" / "minipro-hsp" / "bin" / "minipro"
 HSP_DIRECT_SUPPORTED = None
+SC88_ROT180_SUPPORTED = None
 
 
 def minipro_binary():
@@ -121,6 +123,20 @@ def hsp_direct_supported():
         except (RuntimeError, OSError, subprocess.TimeoutExpired):
             HSP_DIRECT_SUPPORTED = False
     return HSP_DIRECT_SUPPORTED
+
+
+def sc88_rot180_supported():
+    """Check whether the custom rotated 42-to-40 adapter profile is installed."""
+    global SC88_ROT180_SUPPORTED
+    if SC88_ROT180_SUPPORTED is None:
+        try:
+            code, out, _ = run(["-q", "TL866A", "-L", SC88_ROT180_PROFILE_NAME])
+            SC88_ROT180_SUPPORTED = code == 0 and any(
+                line.startswith(SC88_ROT180_PROFILE_NAME) for line in out.splitlines()
+            )
+        except (RuntimeError, OSError, subprocess.TimeoutExpired):
+            SC88_ROT180_SUPPORTED = False
+    return SC88_ROT180_SUPPORTED
 
 
 def declared_size(chip):
@@ -229,7 +245,7 @@ def read_rom(chip, sc88_bank=None, display_chip=None, cancel_event=None, speed=D
             # Standard minipro versions may still emit the complete buffer at once.
             command = [minipro_binary(), "-p", chip, "-c", "code", "-r", "-"]
             if sc88_bank is not None:
-                # Adapter presents a 27C4096 bus, not its JEDEC ID. Read only.
+                # The rotated adapter exposes the ROM bus without its JEDEC ID. Read only.
                 command.append("-x")
             ensure_not_cancelled()
             child_env = os.environ.copy()
@@ -281,7 +297,11 @@ def read_rom(chip, sc88_bank=None, display_chip=None, cancel_event=None, speed=D
                 except OSError:
                     pass
 
-            timer = threading.Timer(180, expire)
+            # The custom SC-88 bit-bang profile takes roughly five minutes for
+            # one 512 KiB bank on a TL866CS. Keep the shorter guard for normal
+            # devices, while allowing the complete bank to finish.
+            timeout_seconds = 600 if sc88_bank is not None else 180
+            timer = threading.Timer(timeout_seconds, expire)
             timer.start()
             while proc.poll() is None:
                 if cancel_event.is_set():
@@ -300,7 +320,9 @@ def read_rom(chip, sc88_bank=None, display_chip=None, cancel_event=None, speed=D
             if cancel_event.is_set():
                 raise ReadCancelled()
             if timed_out.is_set():
-                raise RuntimeError("読み出しが180秒でタイムアウトしました。接続を確認してください。")
+                raise RuntimeError(
+                    f"読み出しが{timeout_seconds}秒でタイムアウトしました。接続を確認してください。"
+                )
             if code != 0:
                 raise RuntimeError("読み出しに失敗しました。実行ログを確認してください。")
             if not dest.exists() or not dest.stat().st_size:
@@ -398,7 +420,8 @@ class Handler(BaseHTTPRequestHandler):
                 code, out, err = run(["-k"])
                 log = re.sub(r"(?m)^(?:Serial code|Device code):.*\n?", "", out + err)
                 connected = code == 0 and "TL866CS" in log
-                return self.reply(200, {"connected": connected, "busy": False, "log": log})
+                return self.reply(200, {"connected": connected, "busy": False, "log": log,
+                                       "sc88_rot180_map": sc88_rot180_supported()})
             finally:
                 USB.release()
         if url.path == "/api/devices":
@@ -439,12 +462,16 @@ class Handler(BaseHTTPRequestHandler):
             if url.path == "/api/download":
                 name = re.sub(r"[^A-Za-z0-9_.-]", "_", chip) + ".bin"
                 return self.reply(200, data, "application/octet-stream", name)
-            offset = max(0, min(int(query.get("offset", ["0"])[0]), max(0, len(data) - 1))) // 256 * 256
+            limit = max(256, min(int(query.get("limit", ["4096"])[0]), 16384))
+            limit = limit // 256 * 256
+            offset = max(0, min(int(query.get("offset", ["0"])[0]), max(0, len(data) - 1))) // 16 * 16
             lines = []
-            for start in range(offset, min(offset + 256, len(data)), 16):
+            end = min(offset + limit, len(data))
+            for start in range(offset, end, 16):
                 row = data[start:start + 16]
                 lines.append(f"{start:08X}  " + " ".join(f"{b:02X}" for b in row).ljust(47) + "  " + "".join(chr(b) if 32 <= b < 127 else "." for b in row))
-            return self.reply(200, {"text": "\n".join(lines), "offset": offset, "size": len(data), "partial": partial})
+            return self.reply(200, {"text": "\n".join(lines), "offset": offset, "end": end,
+                                    "size": len(data), "partial": partial})
         files = {"/": ("index.html", "text/html; charset=utf-8"), "/app.js": ("app.js", "text/javascript"), "/style.css": ("style.css", "text/css")}
         if url.path in files:
             name, mime = files[url.path]
@@ -503,7 +530,7 @@ class Handler(BaseHTTPRequestHandler):
                     raise ValueError("ROMと変換アダプターの適合・設定を確認してください。")
             chip = SC88_CHIP if sc88 else body.get("chip")
             profile = None if sc88 else PROFILES.get(chip)
-            reader_chip = chip
+            reader_chip = SC88_ROT180_PROFILE_NAME if sc88 and sc88_rot180_supported() else chip
             direct_profile = False
             if profile:
                 reader_chip = profile["reader_chip"]
@@ -552,7 +579,9 @@ class Handler(BaseHTTPRequestHandler):
                                "log": "", "started": time.time(), "expected_size": expected_size,
                                "progress": 0.0, "partial_size": 0, "bytes_read": 0,
                                "speed": speed, "cancel_requested": False, "data_cleared": False}
-                    header = ("Bank 0 / adapter read; ID check skipped" if sc88 else
+                    header = (("Bank 0 / custom rotated 42-to-40 map; ID check skipped"
+                               if reader_chip == SC88_ROT180_PROFILE_NAME else
+                               "Bank 0 / signal-map adapter read; ID check skipped") if sc88 else
                               (f"{chip} / {'direct custom PROM bit-bang' if direct_profile else f'adapter reader {reader_chip}'}" if profile else chip))
                 append_job_log(f"--- {header} ---\n", flush=True)
                 if sc88 and bank == 1:

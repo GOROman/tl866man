@@ -39,7 +39,7 @@ index 207a385..12274f3 100644
  
  	fclose(file);
 diff --git a/src/prom.c b/src/prom.c
-index 7118eea..63c3c69 100644
+index 7118eea..eaa6716 100644
 --- a/src/prom.c
 +++ b/src/prom.c
 @@ -28,6 +28,29 @@
@@ -72,7 +72,7 @@ index 7118eea..63c3c69 100644
  typedef struct prom {
  	uint8_t *gnd_pins;	/* GND pins list */
  	uint8_t *vcc_pins;	/* VCC pins list */
-@@ -162,6 +185,18 @@ static prom_t prom_table[] = {
+@@ -162,6 +185,35 @@ static prom_t prom_table[] = {
  		  (uint8_t[]){ 8, 7, 6, 5, 4, 3, 2, 1, 23, 22, 19, 18, 21, 0 },
  	  .ce_lo_pins = (uint8_t[]){ 20, 0 },
  	  .compare_mask = 0xff },
@@ -88,10 +88,27 @@ index 7118eea..63c3c69 100644
 +		  (uint8_t[]){ 10, 9, 8, 7, 6, 5, 4, 3, 25, 24, 21, 23, 2, 26, 27, 1, 22, 0 },
 +	  .ce_lo_pins = (uint8_t[]){ 20, 0 },
 +	  .compare_mask = 0xff },
++
++	/* Type 14; LH538U0P 262144x16 bank; DIP40 ZIF with adapter rotated 180°.
++	 * Adapter pins 1..20 land on TL866 pins 21..40 and adapter pins 21..40
++	 * land on TL866 pins 1..20.  ROM pin 22 (VCC) therefore lands on the
++	 * VCC-capable TL866 pin 1.  ROM pin 1 (A18) is an external bank switch
++	 * and pin 42 is NC.  BYTE/VPP is held high for word-wide reads. */
++	{ .gnd_pins = (uint8_t[]){ 31, 10, 0 },
++	  .vcc_pins = (uint8_t[]){ 1, 0 },
++	  .data_bus_pins =
++		  (uint8_t[]){ 33, 35, 37, 39, 2, 4, 6, 8,
++				34, 36, 38, 40, 3, 5, 7, 9, 0 },
++	  .addr_bus_pins =
++		  (uint8_t[]){ 29, 28, 27, 26, 25, 24, 23, 22,
++				20, 19, 18, 17, 16, 15, 14, 13, 12, 21, 0 },
++	  .ce_lo_pins = (uint8_t[]){ 30, 32, 0 },
++	  .ce_hi_pins = (uint8_t[]){ 11, 0 },
++	  .compare_mask = 0xffff },
  };
  
  static mask_prom_t mask_prom_table[] = {
-@@ -361,6 +396,7 @@ static int prom_read_mask_prom(minipro_handle_t *handle, uint32_t address,
+@@ -361,6 +413,7 @@ static int prom_read_mask_prom(minipro_handle_t *handle, uint32_t address,
  			/* Convert zif data bus value and write it to buffer */
  			buffer[i] = get_bits(zif, mask_prom_table[type].data_bus_pins,
  					     pin_count);
@@ -99,11 +116,59 @@ index 7118eea..63c3c69 100644
  
  			set_bits(zif_state, mask_prom_table[type].ce_pins,
  					 ~ce_bit_pattern, pin_count);
-@@ -419,6 +455,7 @@ int prom_read(minipro_handle_t *handle, uint32_t address, uint8_t *buffer,
- 		/* Convert zif data bus value and write it to buffer */
- 		buffer[i] = get_bits(zif, prom_table[type].data_bus_pins,
- 				     pin_count);
-+		tl866man_read_delay();
+@@ -405,20 +458,44 @@ int prom_read(minipro_handle_t *handle, uint32_t address, uint8_t *buffer,
+ 		return EXIT_FAILURE;
+ 
+ 	/* Read length bytes */
+-	for (int i = 0; i < lenght; i++) {
+-		/* Set address value to zif pins */
+-		set_bits(zif_state, prom_table[type].addr_bus_pins, address + i,
+-			 pin_count);
+-		if (minipro_set_zif_state(handle, zif_state))
++	if (handle->device->flags.word_size == 2) {
++		if (lenght & 1)
+ 			return EXIT_FAILURE;
++		for (size_t i = 0; i < lenght / 2; i++) {
++			/* Set word address to zif pins */
++			set_bits(zif_state, prom_table[type].addr_bus_pins,
++				 address + i, pin_count);
++			if (minipro_set_zif_state(handle, zif_state))
++				return EXIT_FAILURE;
+ 
+-		/* Now read the zif pins */
+-		if (minipro_get_zif_state(handle, zif))
+-			return EXIT_FAILURE;
++			/* Now read the zif pins */
++			if (minipro_get_zif_state(handle, zif))
++				return EXIT_FAILURE;
++
++			/* Store the 16-bit word in minipro's little-endian format. */
++			uint16_t value = (uint16_t)get_bits(
++				zif, prom_table[type].data_bus_pins, pin_count);
++			buffer[i * 2] = value & 0xff;
++			buffer[i * 2 + 1] = value >> 8;
++			tl866man_read_delay();
++		}
++	} else {
++		for (size_t i = 0; i < lenght; i++) {
++			/* Set address value to zif pins */
++			set_bits(zif_state, prom_table[type].addr_bus_pins,
++				 address + i, pin_count);
++			if (minipro_set_zif_state(handle, zif_state))
++				return EXIT_FAILURE;
+ 
+-		/* Convert zif data bus value and write it to buffer */
+-		buffer[i] = get_bits(zif, prom_table[type].data_bus_pins,
+-				     pin_count);
++			/* Now read the zif pins */
++			if (minipro_get_zif_state(handle, zif))
++				return EXIT_FAILURE;
++
++			/* Convert zif data bus value and write it to buffer */
++			buffer[i] = get_bits(zif, prom_table[type].data_bus_pins,
++					     pin_count);
++			tl866man_read_delay();
++		}
  	}
  
  	/* Set chip enable pins state to disabled */

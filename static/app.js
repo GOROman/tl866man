@@ -1,7 +1,7 @@
 const $ = id => document.getElementById(id);
 let scJob = null;
 let selectedProfile = null;
-let token, connected = false, busy = false, chip = '', offset = 0, total = 0, searchTimer, searchVersion = 0, infoVersion = 0, shownResult = null, previewStamp = '', viewerHasData = false;
+let token, connected = false, busy = false, chip = '', offset = 0, total = 0, hexEnd = 0, hexLoading = false, searchTimer, searchVersion = 0, infoVersion = 0, shownResult = null, previewStamp = '', viewerHasData = false;
 async function api(path, options) {
   const response = await fetch(path, options);
   const data = await response.json();
@@ -97,6 +97,12 @@ async function status() {
     $('status').textContent = state.busy ? '読み出し中' : connected ? 'TL866CS 接続済み' : 'TL866CS 未接続';
     $('status').className = 'badge' + (connected ? ' connected' : '');
     $('connection').textContent = state.log || 'USBケーブルを確認してください。';
+    if ($('scMapStatus')) {
+      const mapReady = state.sc88_rot180_map;
+      $('scMapStatus').textContent = mapReady === true ? 'ROT180 MAP READY · VCC: ROM 22→TL866 1' :
+        mapReady === false ? '回転マップ未検出 · カスタムminiproを再ビルドしてください' : '180度回転ピンマップを確認中…';
+      $('scMapStatus').className = 'map-status' + (mapReady === true ? ' ready' : '');
+    }
   } catch (e) { connected = false; $('status').textContent = '接続確認エラー'; $('status').className = 'badge'; $('connection').textContent = e.message; }
   controls();
 }
@@ -144,16 +150,32 @@ function updateProgress(job) {
     state === 'error' ? 'エラー · 取得済みデータを保持' : state === 'waiting_bank' ? 'Bank 0取得済み · 次のバンク待ち' :
     `読み出し中 · ${speedLabel} · 取得済みデータを表示`;
 }
-async function hex(at = 0) {
-  const d = await api('/api/hex?offset=' + at); offset = d.offset; total = d.size;
+async function hex(at = 0, preserveScroll = false) {
+  const scrollTop = $('hex').scrollTop;
+  const d = await api('/api/hex?limit=4096&offset=' + at); offset = d.offset; hexEnd = d.end; total = d.size;
   $('hex').textContent = d.text; $('range').textContent = `${offset.toString(16).toUpperCase().padStart(8, '0')} / ${total.toLocaleString()} bytes`;
-  $('prev').disabled = offset === 0; $('next').disabled = offset + 256 >= total;
+  if (preserveScroll) $('hex').scrollTop = scrollTop;
+  $('prev').disabled = offset === 0; $('next').disabled = hexEnd >= total;
   $('partialNote').hidden = !d.partial;
   $('partialNote').textContent = d.partial ? `途中ダンプ · ${total.toLocaleString()} bytes取得済み（読み出し中に更新）` : '';
   viewerHasData = true; controls();
 }
-$('prev').onclick = () => hex(Math.max(0, offset - 256)).catch(error);
-$('next').onclick = () => hex(offset + 256).catch(error);
+async function appendHex() {
+  if (hexLoading || hexEnd >= total) return;
+  hexLoading = true;
+  try {
+    const d = await api('/api/hex?limit=4096&offset=' + hexEnd);
+    if (d.text) $('hex').textContent += `\n${d.text}`;
+    hexEnd = d.end; total = d.size;
+    $('range').textContent = `${offset.toString(16).toUpperCase().padStart(8, '0')}–${hexEnd.toString(16).toUpperCase().padStart(8, '0')} / ${total.toLocaleString()} bytes`;
+    $('next').disabled = hexEnd >= total;
+  } finally { hexLoading = false; }
+}
+$('hex').addEventListener('scroll', () => {
+  if ($('hex').scrollTop + $('hex').clientHeight >= $('hex').scrollHeight - 80) appendHex().catch(error);
+});
+$('prev').onclick = () => hex(Math.max(0, offset - 4096)).catch(error);
+$('next').onclick = () => hex(hexEnd).catch(error);
 $('jump').onclick = () => { const value = $('offset').value.trim(); if (!/^(0x)?[0-9a-f]+$/i.test(value)) return error(new Error('16進数のアドレスを入力してください。')); const address = parseInt(value, 16); if (!Number.isSafeInteger(address) || address >= total) return error(new Error('ROMの容量内のアドレスを入力してください。')); hex(address).catch(error); };
 $('download').onclick = async e => {
   e.preventDefault();
@@ -229,13 +251,20 @@ async function poll() {
     } else if (job.partial_size > 0 && job.status !== 'done') {
       const stamp = `${job.id}:${job.partial_size}`;
       if (stamp !== previewStamp) {
-        await hex(0); previewStamp = stamp;
+        if (!viewerHasData) await hex(0);
+        else {
+          total = job.partial_size;
+          $('range').textContent = `${offset.toString(16).toUpperCase().padStart(8, '0')}–${hexEnd.toString(16).toUpperCase().padStart(8, '0')} / ${total.toLocaleString()} bytes`;
+          $('next').disabled = hexEnd >= total;
+          $('partialNote').textContent = `途中ダンプ · ${total.toLocaleString()} bytes取得済み（表示位置を保持）`;
+        }
+        previewStamp = stamp;
       }
       $('empty').hidden = true; $('hexPanel').hidden = false; $('download').hidden = true;
       $('resultChip').textContent = job.chip || chip; $('size').textContent = `${job.partial_size.toLocaleString()} B`;
     }
     if (job.status === 'done' && !job.data_cleared && shownResult !== job.started) {
-      await hex(0); shownResult = job.started;
+      if (!viewerHasData) await hex(0); shownResult = job.started;
       $('empty').hidden = true; $('hexPanel').hidden = $('download').hidden = false;
       $('resultChip').textContent = job.chip; $('size').textContent = job.size.toLocaleString() + ' B'; $('duration').textContent = job.seconds + ' s'; $('hash').textContent = job.sha256; $('uniform').hidden = !(job.uniform || job.banks_identical);
       $('uniform').textContent = job.banks_identical ? 'Bank 0とBank 1が完全一致しています。バンク切替が反映されているか確認してください。' : '全バイトが同じ値です。空のROMや接触不良の可能性があります。';

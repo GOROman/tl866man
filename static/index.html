@@ -40,11 +40,12 @@
         <section class="card sc88-card">
           <div class="section-title"><h2><span>Roland SC-88Pro</span></h2><span class="profile-tag">PRG ROM</span></div>
           <div class="profile-spec"><strong>1 <small>MiB</small></strong><span>IC26 / 8 Mbit<br>512 KiB × 2 banks</span></div>
-          <p class="hint">μPD27C8000DZ（DIP42）向け。27C800 → 27C4096変換・バンク切替アダプターが必要です。直接挿入や、名前が似たDIP32の設定は使えません。LH538U0L（FLAT）は別途ピン配置の確認が必要です。</p>
-          <details><summary>接続条件・読み出し手順</summary><p class="hint">対応はアダプター経由のソフトウェアフローです。SC-88Pro実機では未検証。取り外したROMの型番・ピン配置が27C800系と一致し、使用アダプターが27C4096設定で512 KiB単位を読み出せることを確認してください。</p><p class="hint">アダプターを27C800用モードへ設定。Bank 0（ROMのA18=0）、次に読み出し終了後Bank 1（A18=1）へ手動切替。スイッチのON/OFFと番号は製品の説明に従ってください。IDチェックはこのフローのみ省略します。</p><a href="https://github.com/silvervest/TL866-27Cxxx-adapter" target="_blank" rel="noreferrer">アダプター仕様 ↗</a></details>
-          <label class="confirm"><input id="adapterConfirm" type="checkbox">ROMのピン互換・アダプター・向きと、下記バンク設定を確認しました</label>
+          <p class="hint">Roland R01237867 / Sharp LH538U0P（DIP42）向け。連番下駄をTL866CSへ180度回転して装着します。ROM 2〜21→TL866 21〜40、ROM 22〜41→TL866 1〜20、ROM 1はA18 BANKスイッチ、ROM 42はNCです。</p>
+          <details><summary>接続条件・読み出し手順</summary><p class="hint">下駄の切り欠き側をTL866CSのレバー側と反対に向けます。この回転でROM pin 22（VCC）がTL866 pin 1へ入り、TL866CSから+5Vを供給できます。無回転ではTL866 pin 21にVCCドライバがないため使用できません。</p><p class="hint">Bank 0（ROMのA18=0）を読み、終了後にBank 1（A18=1）へ手動切替します。ROM・下駄を抜かずにA18だけ切り替えてください。</p></details>
+          <label class="confirm"><input id="adapterConfirm" type="checkbox">USBを抜いて導通確認済み: ROM 22→TL866 1、ROM 12→31、ROM 31→10。下駄とROMを一緒に180度回転しました</label>
           <p id="bankInstruction" class="bank-instruction">01 / Bank 0 · ROM A18 = 0</p>
           <button id="scRead" class="primary" disabled>Bank 0を読み出す</button>
+          <p id="scMapStatus" class="map-status">180度回転ピンマップを確認中…</p>
           <p id="scProgress" class="hint">未取得 · 実機の適合確認が必要</p>
         </section>
 
@@ -105,100 +106,138 @@
             <h2><span id="wiringTitle">SC-88Pro 接続図</span><em>READ-ONLY WIRING</em></h2>
             <span class="profile-tag">42P → 40P</span>
           </div>
-          <p class="wiring-lede">IC26の42ピンROMを、信号名を合わせて27C4096相当へ変換します。TL866CSへROMを直挿しせず、必ず変換アダプターを間に入れてください。</p>
-          <div class="wiring-flow" role="img" aria-label="SC-88Pro IC26の42ピンROMを27C800から27C4096へ変換してTL866CSで読む接続図">
+          <p class="wiring-lede">連番下駄をTL866CSの40ピンZIFへ180度回転して装着します。ROMの切り欠きとTL866CSのレバー側が反対向きになります。</p>
+          <div class="pin1-callout" aria-label="A18バンクスイッチと連番配線案">
+            <div class="pin1-callout-head"><strong>A18 = 外部BANKスイッチ</strong><span>TL866 1番とROM 1番は同じ信号ではありません</span></div>
+            <div class="pin1-callout-flow">
+              <div><small>ROM pin 1</small><b>A18</b><em>0 = Bank 0 · 1 = Bank 1</em></div>
+              <strong>→</strong>
+              <div><small>アダプター上のSPDT</small><b>GND / +5V</b><em>読み出しごとに固定</em></div>
+              <strong>≠</strong>
+              <div><small>TL866 pin 1</small><b>+5V</b><em>ROM pin 22 VCCへ</em></div>
+            </div>
+            <p>下駄内部はROM 2→header 1、…、ROM 41→header 40の連番のままです。下駄全体を180度回転すると、ROM 22のVCCがTL866 pin 1へ入ります。専用プロファイル <code>SC-88Pro PRG LH538U0P-ROT180 DIP40</code> が全信号を回転後の位置へ割り当てます。</p>
+          </div>
+          <div class="wiring-flow" role="img" aria-label="連番下駄を180度回転してTL866CSから27C800の42ピンROMを読む接続図">
+            <article class="wiring-node wiring-reader">
+              <div class="wiring-kicker">01 · REFERENCE</div>
+              <h3>TL866CS ZIF</h3>
+              <p>LH538U0P-ROT180 · custom read</p>
+              <div class="wiring-badges"><span class="wire-address">A0–A17</span><span class="wire-data">DQ0–DQ15</span><span class="wire-control">CE# · OE#</span><span class="wire-power">VPP · VCC · VSS</span></div>
+            </article>
+            <div class="wiring-connector" aria-hidden="true"><b>40-pin</b><i></i><strong>→</strong><i></i><small>信号名を追う</small></div>
+            <article class="wiring-node wiring-adapter">
+              <div class="wiring-kicker">02 · INTERPOSER</div>
+              <h3>180° ROTATED ADAPTER</h3>
+              <p>header pin 21 → TL866 pin 1</p>
+              <div class="adapter-core"><span>BYTE/VPP = 1</span><b>A18</b><em>0 / 1</em></div>
+              <div class="wiring-badges"><span class="wire-address">A18 BANK SW</span><span class="wire-control">ID CHECK OFF</span></div>
+            </article>
+            <div class="wiring-connector" aria-hidden="true"><b>42-pin</b><i></i><strong>→</strong><i></i><small>notch opposite</small></div>
             <article class="wiring-node wiring-rom">
-              <div class="wiring-kicker">01 · IC26</div>
-              <h3>μPD27C8000DZ</h3>
+              <div class="wiring-kicker">03 · IC26</div>
+              <h3>LH538U0P</h3>
               <p>42-pin · 8 Mbit · 1 MiB</p>
               <div class="wiring-badges">
                 <span class="wire-address">A0–A18</span><span class="wire-data">DQ0–DQ15</span><span class="wire-control">CE# · OE#</span><span class="wire-power">BYTE/VPP · VCC · GND</span>
               </div>
             </article>
-            <div class="wiring-connector" aria-hidden="true"><b>信号名</b><i></i><strong>→</strong><i></i><small>1:1配線</small></div>
-            <article class="wiring-node wiring-adapter">
-              <div class="wiring-kicker">02 · INTERPOSER</div>
-              <h3>27C800 → 27C4096</h3>
-              <p>42-pin socket → 40-pin header</p>
-              <div class="adapter-core"><span>BYTE/VPP = 1</span><b>A18</b><em>0 / 1</em></div>
-              <div class="wiring-badges"><span class="wire-address">A18 BANK SW</span><span class="wire-control">ID CHECK OFF</span></div>
-            </article>
-            <div class="wiring-connector" aria-hidden="true"><b>ZIFへ</b><i></i><strong>→</strong><i></i><small>40-pin</small></div>
-            <article class="wiring-node wiring-reader">
-              <div class="wiring-kicker">03 · PROGRAMMER</div>
-              <h3>TL866CS ZIF</h3>
-              <p>AM27C4096@DIP40 · read</p>
-              <div class="wiring-badges"><span class="wire-address">A0–A17</span><span class="wire-data">DQ0–DQ15</span><span class="wire-control">CE# · OE#</span><span class="wire-power">VPP · VCC · VSS</span></div>
-            </article>
           </div>
-          <div class="physical-layout" role="img" aria-label="切り欠きを上にした42ピンROMの物理的なピン列">
-            <div class="physical-layout-head"><span>ROM側の並びを基準にする</span><b>PIN 1 SAME SIDE</b></div>
+          <div class="physical-layout rotated" role="img" aria-label="TL866CSを上から見て180度回転したLH538U0Pの42ピンを個別に表示">
+            <div class="physical-layout-head"><span>180度回転後のTL866接続先 · 42ピン完全表示</span><b>NOTCH OPPOSITE</b></div>
             <div class="physical-layout-grid">
               <div class="physical-side physical-left">
-                <div class="physical-pin wire-address"><b>01–02</b><span>A18 · A17</span></div>
-                <div class="physical-pin wire-address"><b>03–10</b><span>A7 · A6 · A5 · A4 · A3 · A2 · A1 · A0</span></div>
-                <div class="physical-pin wire-control"><b>11–13</b><span>CE# · GND · OE#</span></div>
-                <div class="physical-pin wire-data"><b>14–15</b><span>DQ0 · DQ8</span></div>
-                <div class="physical-pin wire-data"><b>16–17</b><span>DQ1 · DQ9</span></div>
-                <div class="physical-pin wire-data"><b>18–19</b><span>DQ2 · DQ10</span></div>
-                <div class="physical-pin wire-data"><b>20–21</b><span>DQ3 · DQ11</span></div>
+                <div class="physical-pin wire-address"><b>01</b><span>A18</span><small>TL866: BANK SW</small></div>
+                <div class="physical-pin wire-address"><b>02</b><span>A17</span><small>TL866: 21</small></div>
+                <div class="physical-pin wire-address"><b>03</b><span>A7</span><small>TL866: 22</small></div>
+                <div class="physical-pin wire-address"><b>04</b><span>A6</span><small>TL866: 23</small></div>
+                <div class="physical-pin wire-address"><b>05</b><span>A5</span><small>TL866: 24</small></div>
+                <div class="physical-pin wire-address"><b>06</b><span>A4</span><small>TL866: 25</small></div>
+                <div class="physical-pin wire-address"><b>07</b><span>A3</span><small>TL866: 26</small></div>
+                <div class="physical-pin wire-address"><b>08</b><span>A2</span><small>TL866: 27</small></div>
+                <div class="physical-pin wire-address"><b>09</b><span>A1</span><small>TL866: 28</small></div>
+                <div class="physical-pin wire-address"><b>10</b><span>A0</span><small>TL866: 29</small></div>
+                <div class="physical-pin wire-control"><b>11</b><span>CE#</span><small>TL866: 30</small></div>
+                <div class="physical-pin wire-power"><b>12</b><span>VSS / GND</span><small>TL866: 31</small></div>
+                <div class="physical-pin wire-control"><b>13</b><span>OE#</span><small>TL866: 32</small></div>
+                <div class="physical-pin wire-data"><b>14</b><span>DQ0</span><small>TL866: 33</small></div>
+                <div class="physical-pin wire-data"><b>15</b><span>DQ8</span><small>TL866: 34</small></div>
+                <div class="physical-pin wire-data"><b>16</b><span>DQ1</span><small>TL866: 35</small></div>
+                <div class="physical-pin wire-data"><b>17</b><span>DQ9</span><small>TL866: 36</small></div>
+                <div class="physical-pin wire-data"><b>18</b><span>DQ2</span><small>TL866: 37</small></div>
+                <div class="physical-pin wire-data"><b>19</b><span>DQ10</span><small>TL866: 38</small></div>
+                <div class="physical-pin wire-data"><b>20</b><span>DQ3</span><small>TL866: 39</small></div>
+                <div class="physical-pin wire-data"><b>21</b><span>DQ11</span><small>TL866: 40</small></div>
               </div>
               <div class="physical-body">
                 <span class="physical-notch"></span>
-                <div><small>42-PIN ROM</small><strong>μPD27C8000DZ</strong><em>DIP42 · IC26</em></div>
-                <span class="physical-mark physical-mark-top">01</span><span class="physical-mark physical-mark-bottom">21 / 22</span>
+                <div><small>ROLAND R01237867</small><strong>LH538U0P</strong><em>ROTATED 180° · NOTCH ↓</em></div>
+                <span class="physical-mark physical-mark-top">TL866 01</span><span class="physical-mark physical-mark-top-right">TL866 40</span><span class="physical-mark physical-mark-bottom">ROM NOTCH</span>
               </div>
               <div class="physical-side physical-right">
-                <div class="physical-pin wire-power"><b>42</b><span>NC</span></div>
-                <div class="physical-pin wire-address"><b>41–33</b><span>A8 · A9 · A10 · A11 · A12 · A13 · A14 · A15 · A16</span></div>
-                <div class="physical-pin wire-power"><b>32</b><span>BYTE/VPP</span></div>
-                <div class="physical-pin wire-power"><b>31</b><span>GND</span></div>
-                <div class="physical-pin wire-data"><b>30–29</b><span>DQ15 · DQ7</span></div>
-                <div class="physical-pin wire-data"><b>28–25</b><span>DQ14 · DQ6 · DQ13 · DQ5</span></div>
-                <div class="physical-pin wire-data"><b>24–23</b><span>DQ12 · DQ4</span></div>
-                <div class="physical-pin wire-power"><b>22</b><span>VCC</span></div>
+                <div class="physical-pin wire-power"><b>42</b><span>NC</span><small>TL866: —</small></div>
+                <div class="physical-pin wire-address"><b>41</b><span>A8</span><small>TL866: 20</small></div>
+                <div class="physical-pin wire-address"><b>40</b><span>A9</span><small>TL866: 19</small></div>
+                <div class="physical-pin wire-address"><b>39</b><span>A10</span><small>TL866: 18</small></div>
+                <div class="physical-pin wire-address"><b>38</b><span>A11</span><small>TL866: 17</small></div>
+                <div class="physical-pin wire-address"><b>37</b><span>A12</span><small>TL866: 16</small></div>
+                <div class="physical-pin wire-address"><b>36</b><span>A13</span><small>TL866: 15</small></div>
+                <div class="physical-pin wire-address"><b>35</b><span>A14</span><small>TL866: 14</small></div>
+                <div class="physical-pin wire-address"><b>34</b><span>A15</span><small>TL866: 13</small></div>
+                <div class="physical-pin wire-address"><b>33</b><span>A16</span><small>TL866: 12</small></div>
+                <div class="physical-pin wire-power"><b>32</b><span>BYTE/VPP</span><small>TL866: 11</small></div>
+                <div class="physical-pin wire-power"><b>31</b><span>VSS / GND</span><small>TL866: 10</small></div>
+                <div class="physical-pin wire-data"><b>30</b><span>DQ15</span><small>TL866: 09</small></div>
+                <div class="physical-pin wire-data"><b>29</b><span>DQ7</span><small>TL866: 08</small></div>
+                <div class="physical-pin wire-data"><b>28</b><span>DQ14</span><small>TL866: 07</small></div>
+                <div class="physical-pin wire-data"><b>27</b><span>DQ6</span><small>TL866: 06</small></div>
+                <div class="physical-pin wire-data"><b>26</b><span>DQ13</span><small>TL866: 05</small></div>
+                <div class="physical-pin wire-data"><b>25</b><span>DQ5</span><small>TL866: 04</small></div>
+                <div class="physical-pin wire-data"><b>24</b><span>DQ12</span><small>TL866: 03</small></div>
+                <div class="physical-pin wire-data"><b>23</b><span>DQ4</span><small>TL866: 02</small></div>
+                <div class="physical-pin wire-power"><b>22</b><span>VCC</span><small>TL866: 01</small></div>
               </div>
             </div>
-            <p class="physical-layout-note">左列は1番ピンから21番ピン、右列は42番ピンから22番ピン。ソケットをこの向きで置き、A0〜A17／DQ0〜DQ15は信号名でTL866側へ配線します。</p>
+            <p class="physical-layout-note">TL866CSを上から見た向きです。上端は左がTL866 pin 1、右がpin 40。ROMの切り欠きは下側で、ROM pin 42とpin 1は40ピンZIFの外へ出ます。</p>
           </div>
           <div class="wiring-map" aria-label="信号の接続一覧">
-            <div class="wiring-map-row"><span class="wire-address">ADDRESS</span><strong>A0–A17</strong><b>ROM ↔ TL866</b><small>そのまま接続</small></div>
-            <div class="wiring-map-row"><span class="wire-data">DATA</span><strong>DQ0–DQ15</strong><b>ROM ↔ TL866</b><small>そのまま接続</small></div>
-            <div class="wiring-map-row"><span class="wire-control">CONTROL</span><strong>CE# · OE#</strong><b>ROM ↔ TL866</b><small>アクティブLow</small></div>
+            <div class="wiring-map-row"><span class="wire-address">ADDRESS</span><strong>A0–A17</strong><b>ROT180 MAP</b><small>回転後の接点へ割当</small></div>
+            <div class="wiring-map-row"><span class="wire-data">DATA</span><strong>DQ0–DQ15</strong><b>ROT180 MAP</b><small>回転後の接点へ割当</small></div>
+            <div class="wiring-map-row"><span class="wire-control">CONTROL</span><strong>CE# · OE#</strong><b>TL866 → ROM</b><small>アクティブLow</small></div>
             <div class="wiring-map-row"><span class="wire-address">BANK</span><strong>A18</strong><b>スイッチ</b><small>0 = Bank 0 / 1 = Bank 1</small></div>
             <div class="wiring-map-row"><span class="wire-power">POWER</span><strong>BYTE/VPP · VCC · GND</strong><b>アダプター経由</b><small>5V読み出し条件を照合</small></div>
           </div>
-          <details class="wiring-detail">
-            <summary>42ピン → 40ピンの対応を表示</summary>
+          <details class="wiring-detail" open>
+            <summary>LH538U0P フルピンアサイン · TL866 pin → ROM pin（42ピン）</summary>
             <div class="wiring-detail-scroll">
               <table>
-                <thead><tr><th>ROM pin</th><th>信号</th><th>TL866 pin</th><th>ROM pin</th><th>信号</th><th>TL866 pin</th></tr></thead>
+                <thead><tr><th>TL866 pin</th><th>信号</th><th>ROM pin</th><th>TL866 pin</th><th>信号</th><th>ROM pin</th></tr></thead>
                 <tbody>
-                  <tr><td>01</td><td>A18</td><td class="wire-address">BANK SW</td><td>42</td><td>NC</td><td>—</td></tr>
-                  <tr><td>02</td><td>A17</td><td>39</td><td>41</td><td>A8</td><td>29</td></tr>
-                  <tr><td>03</td><td>A7</td><td>28</td><td>40</td><td>A9</td><td>31</td></tr>
-                  <tr><td>04</td><td>A6</td><td>27</td><td>39</td><td>A10</td><td>32</td></tr>
-                  <tr><td>05</td><td>A5</td><td>26</td><td>38</td><td>A11</td><td>33</td></tr>
-                  <tr><td>06</td><td>A4</td><td>25</td><td>37</td><td>A12</td><td>34</td></tr>
-                  <tr><td>07</td><td>A3</td><td>24</td><td>36</td><td>A13</td><td>35</td></tr>
-                  <tr><td>08</td><td>A2</td><td>23</td><td>35</td><td>A14</td><td>36</td></tr>
-                  <tr><td>09</td><td>A1</td><td>22</td><td>34</td><td>A15</td><td>37</td></tr>
-                  <tr><td>10</td><td>A0</td><td>21</td><td>33</td><td>A16</td><td>38</td></tr>
-                  <tr><td>11</td><td>CE#</td><td>02</td><td>32</td><td>BYTE/VPP</td><td>01 VPP</td></tr>
-                  <tr><td>12</td><td>GND</td><td>11/30 VSS</td><td>31</td><td>GND</td><td>11/30 VSS</td></tr>
-                  <tr><td>13</td><td>OE#</td><td>20</td><td>30</td><td>DQ15</td><td>03</td></tr>
-                  <tr><td>14</td><td>DQ0</td><td>19</td><td>29</td><td>DQ7</td><td>12</td></tr>
-                  <tr><td>15</td><td>DQ8</td><td>10</td><td>28</td><td>DQ14</td><td>04</td></tr>
-                  <tr><td>16</td><td>DQ1</td><td>18</td><td>27</td><td>DQ6</td><td>13</td></tr>
-                  <tr><td>17</td><td>DQ9</td><td>09</td><td>26</td><td>DQ13</td><td>05</td></tr>
-                  <tr><td>18</td><td>DQ2</td><td>17</td><td>25</td><td>DQ5</td><td>14</td></tr>
-                  <tr><td>19</td><td>DQ10</td><td>08</td><td>24</td><td>DQ12</td><td>06</td></tr>
-                  <tr><td>20</td><td>DQ3</td><td>16</td><td>23</td><td>DQ4</td><td>15</td></tr>
-                  <tr><td>21</td><td>DQ11</td><td>07</td><td>22</td><td>VCC</td><td>40 VCC</td></tr>
+                  <tr><td class="wire-address">BANK SW</td><td>A18</td><td>01</td><td>—</td><td>NC</td><td>42</td></tr>
+                  <tr><td>21</td><td>A17</td><td>02</td><td>20</td><td>A8</td><td>41</td></tr>
+                  <tr><td>22</td><td>A7</td><td>03</td><td>19</td><td>A9</td><td>40</td></tr>
+                  <tr><td>23</td><td>A6</td><td>04</td><td>18</td><td>A10</td><td>39</td></tr>
+                  <tr><td>24</td><td>A5</td><td>05</td><td>17</td><td>A11</td><td>38</td></tr>
+                  <tr><td>25</td><td>A4</td><td>06</td><td>16</td><td>A12</td><td>37</td></tr>
+                  <tr><td>26</td><td>A3</td><td>07</td><td>15</td><td>A13</td><td>36</td></tr>
+                  <tr><td>27</td><td>A2</td><td>08</td><td>14</td><td>A14</td><td>35</td></tr>
+                  <tr><td>28</td><td>A1</td><td>09</td><td>13</td><td>A15</td><td>34</td></tr>
+                  <tr><td>29</td><td>A0</td><td>10</td><td>12</td><td>A16</td><td>33</td></tr>
+                  <tr><td>30</td><td>CE#</td><td>11</td><td>11</td><td>BYTE/VPP</td><td>32</td></tr>
+                  <tr><td>31</td><td>VSS / GND</td><td>12</td><td>10</td><td>VSS / GND</td><td>31</td></tr>
+                  <tr><td>32</td><td>OE#</td><td>13</td><td>09</td><td>DQ15</td><td>30</td></tr>
+                  <tr><td>33</td><td>DQ0</td><td>14</td><td>08</td><td>DQ7</td><td>29</td></tr>
+                  <tr><td>34</td><td>DQ8</td><td>15</td><td>07</td><td>DQ14</td><td>28</td></tr>
+                  <tr><td>35</td><td>DQ1</td><td>16</td><td>06</td><td>DQ6</td><td>27</td></tr>
+                  <tr><td>36</td><td>DQ9</td><td>17</td><td>05</td><td>DQ13</td><td>26</td></tr>
+                  <tr><td>37</td><td>DQ2</td><td>18</td><td>04</td><td>DQ5</td><td>25</td></tr>
+                  <tr><td>38</td><td>DQ10</td><td>19</td><td>03</td><td>DQ12</td><td>24</td></tr>
+                  <tr><td>39</td><td>DQ3</td><td>20</td><td>02</td><td>DQ4</td><td>23</td></tr>
+                  <tr><td>40</td><td>DQ11</td><td>21</td><td class="wire-power">01</td><td>VCC</td><td>22</td></tr>
                 </tbody>
               </table>
             </div>
-            <p class="wiring-detail-note">表は27C800を16-bitモードで27C4096相当に見せる読み出し配線です。ピン1の向き、BYTE/VPPの電位、A18スイッチの0/1を実部品のデータシートで照合してください。</p>
+            <p class="wiring-detail-note">TL866 pinは下駄を180度回転して装着した後の接点番号です。ROM pin 22のVCCがTL866 pin 1、ROM pin 12/31のGNDがTL866 pin 31/10へ入ることをテスターで確認してください。</p>
           </details>
           <div class="bank-flow">
             <div class="bank-step"><span>READ 01</span><strong>Bank 0</strong><b>A18 = 0</b><small>512 KiBを保存</small></div>
@@ -207,7 +246,7 @@
             <div class="bank-arrow" aria-hidden="true">→</div>
             <div class="bank-step"><span>READ 02</span><strong>Bank 1</strong><b>A18 = 1</b><small>512 KiBを結合</small></div>
           </div>
-          <div class="wiring-warning"><b>!</b><p>42ピンROMのピン番号を40ピンZIFへ機械的に重ねないでください。ROMのデータシートとアダプターの回路図を照合し、最初は読み出し専用・IDチェックOFFで確認します。</p></div>
+          <div class="wiring-warning"><b>!</b><p>専用ROT180プロファイル以外でこの向きを使わないでください。ROMの切り欠きはTL866CSのレバー側と反対です。装着前にVCCとGNDの導通を確認します。</p></div>
         </section>
         <section class="card viewer">
           <div class="section-title"><h2>03 <span>メモリビュー</span><em>MEMORY INSPECTOR</em></h2><div class="viewer-actions"><button id="cancel" class="cancel" hidden>■ 読み出しをキャンセル</button><button id="clear" class="clear" disabled>× クリア</button><a id="download" class="download" href="/api/download" hidden>↓ BINを保存</a></div></div>
@@ -225,7 +264,7 @@
             <p id="partialNote" class="partial-note" hidden>途中ダンプ · 読み出し中のため内容は変化します</p>
             <div class="hex-head">ADDRESS&nbsp;&nbsp;&nbsp; 00 01 02 03 04 05 06 07 08 09 0A 0B 0C 0D 0E 0F&nbsp; ASCII</div>
             <pre id="hex"></pre>
-            <div class="paging"><button id="prev">← 前へ</button><span id="range"></span><button id="next">次へ →</button></div>
+            <div class="paging"><button id="prev">← 前の4 KiB</button><span id="range"></span><button id="next">次の4 KiB →</button></div>
             <label for="offset">アドレスへ移動（16進数）</label><div class="jump"><input id="offset" placeholder="00001000"><button id="jump">移動</button></div>
             <p id="uniform" class="hint" hidden>全バイトが同じ値です。空のROMや接触不良の可能性があります。</p><p class="hash">SHA-256 <span id="hash"></span></p>
           </div>
