@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TL866man · ROM Reader</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <header>
+    <a class="brand" href="/">▦ <strong>TL866<span>man</span></strong></a>
+    <span class="tag">HARDWARE / MEMORY LAB</span>
+    <span class="local"><i></i> LOCAL WORKSPACE <b>01</b></span>
+  </header>
+  <main>
+    <div class="heading">
+      <div>
+        <p class="eyebrow"><span></span> MINIPRO TL866CS <em>/</em> READ-ONLY INTERFACE</p>
+        <h1>Inside the <span>memory.</span></h1>
+        <p class="muted">ROMの中身を、手元に。チップからバイナリまで、ひとつのワークスペースで。</p>
+      </div>
+      <div id="status" class="badge" role="status">接続を確認中…</div>
+    </div>
+    <div id="error" class="error" role="alert" hidden></div>
+    <div class="workspace">
+      <aside>
+        <section class="card">
+          <div class="section-title">
+            <h2>01 <span>プログラマー</span></h2>
+            <button id="refresh" class="small">再確認</button>
+          </div>
+          <div class="device-illustration" aria-hidden="true">
+            <div class="socket"><i></i><b>TL866CS</b></div>
+            <span>MINIPRO UNIVERSAL PROGRAMMER</span>
+          </div>
+          <pre id="connection" class="connection">USB接続を確認しています</pre>
+        </section>
+
+        <section class="card sc88-card">
+          <div class="section-title"><h2><span>Roland SC-88Pro</span></h2><span class="profile-tag">PRG ROM</span></div>
+          <div class="profile-spec"><strong>1 <small>MiB</small></strong><span>IC26 / 8 Mbit<br>512 KiB × 2 banks</span></div>
+          <p class="hint">μPD27C8000DZ（DIP42）向け。27C800 → 27C4096変換・バンク切替アダプターが必要です。直接挿入や、名前が似たDIP32の設定は使えません。LH538U0L（FLAT）は別途ピン配置の確認が必要です。</p>
+          <details><summary>接続条件・読み出し手順</summary><p class="hint">対応はアダプター経由のソフトウェアフローです。SC-88Pro実機では未検証。取り外したROMの型番・ピン配置が27C800系と一致し、使用アダプターが27C4096設定で512 KiB単位を読み出せることを確認してください。</p><p class="hint">アダプターを27C800用モードへ設定。Bank 0（ROMのA18=0）、次に読み出し終了後Bank 1（A18=1）へ手動切替。スイッチのON/OFFと番号は製品の説明に従ってください。IDチェックはこのフローのみ省略します。</p><a href="https://github.com/silvervest/TL866-27Cxxx-adapter" target="_blank" rel="noreferrer">アダプター仕様 ↗</a></details>
+          <label class="confirm"><input id="adapterConfirm" type="checkbox">ROMのピン互換・アダプター・向きと、下記バンク設定を確認しました</label>
+          <p id="bankInstruction" class="bank-instruction">01 / Bank 0 · ROM A18 = 0</p>
+          <button id="scRead" class="primary" disabled>Bank 0を読み出す</button>
+          <p id="scProgress" class="hint">未取得 · 実機の適合確認が必要</p>
+        </section>
+
+        <section class="card">
+          <h2>02 <span>ROMを選択</span></h2>
+          <label for="search">チップの型番</label>
+          <input id="search" type="search" placeholder="例: HSP-08-0 PRG / 27C256" autocomplete="off">
+          <p id="count" class="hint">型番を入力して検索</p>
+          <select id="chips" size="6" aria-label="型番の検索結果"></select>
+          <pre id="info" class="info">候補を選ぶと容量・パッケージを表示します。</pre>
+          <div id="pinout" class="pinout" hidden>
+            <div class="pinout-heading"><strong id="pinoutTitle">ピンアサイン</strong><span>LH2310 / DIP-28</span></div>
+            <p class="pinout-note">切り欠きを上に見たROM側のピン番号。緑は信号、黄色は電源です。</p>
+            <div class="pin-table-wrap">
+              <table>
+                <thead><tr><th>PIN</th><th>SIGNAL</th><th>ROLE</th><th>接続先／意味</th></tr></thead>
+                <tbody id="pins"></tbody>
+              </table>
+            </div>
+            <div id="pinWarnings" class="pin-warnings"></div>
+            <label id="profileAdapterLabel" class="confirm" hidden><input id="profileAdapterConfirm" type="checkbox">LH2310 DIP-28 → AM27C010 DIP-32 の配線アダプターを用意し、上のピン配置と向きを確認しました</label>
+          </div>
+          <label class="confirm"><input id="confirm" type="checkbox">選択した型番と、チップの装着位置・向きを確認しました</label>
+          <button id="read" class="primary" disabled>↓ ROMを読み出す</button>
+          <p class="hint">読み出し専用 · チップの書き込み／消去は行いません</p>
+        </section>
+      </aside>
+
+      <div class="content">
+        <section class="card viewer">
+          <div class="section-title"><h2>03 <span>メモリビュー</span><em>MEMORY INSPECTOR</em></h2><a id="download" class="download" href="/api/download" hidden>↓ BINを保存</a></div>
+          <div class="metrics"><div><span>CHIP</span><strong id="resultChip">—</strong></div><div><span>SIZE</span><strong id="size">—</strong></div><div><span>READ TIME</span><strong id="duration">—</strong></div></div>
+          <div id="empty">
+            <div class="memory-art" aria-hidden="true"><div class="orbit orbit-one"></div><div class="orbit orbit-two"></div><div class="chip-art"><div class="chip-core"><span>ROM</span><b>0x<span>00</span></b><small>AWAITING INPUT</small></div></div><span class="art-cross cross-one">+</span><span class="art-cross cross-two">+</span></div>
+            <p class="empty-kicker">READY WHEN YOU ARE</p><h3>すべては、最初の1バイトから。</h3><p>チップの型番を選んで読み出しを開始。<br>ここにメモリの内容が表示されます。</p><div class="empty-formats"><span>HEX</span><span>ASCII</span><span>BINARY</span></div>
+          </div>
+          <div id="hexPanel" hidden>
+            <div class="hex-head">ADDRESS&nbsp;&nbsp;&nbsp; 00 01 02 03 04 05 06 07 08 09 0A 0B 0C 0D 0E 0F&nbsp; ASCII</div>
+            <pre id="hex"></pre>
+            <div class="paging"><button id="prev">← 前へ</button><span id="range"></span><button id="next">次へ →</button></div>
+            <label for="offset">アドレスへ移動（16進数）</label><div class="jump"><input id="offset" placeholder="00001000"><button id="jump">移動</button></div>
+            <p id="uniform" class="hint" hidden>全バイトが同じ値です。空のROMや接触不良の可能性があります。</p><p class="hash">SHA-256 <span id="hash"></span></p>
+          </div>
+        </section>
+        <section class="card logs"><div class="section-title"><h2><span class="terminal-icon">&gt;_</span> 実行ログ <em>CONSOLE</em></h2><span id="jobStatus" class="muted" role="status">待機中</span></div><pre id="log" aria-live="polite">読み出しログがここに表示されます。</pre></section>
+      </div>
+    </div>
+    <footer><div class="footer-brand">TL866man <b>ROM READER</b></div><span>読み出したデータはサーバーのメモリに保持されます。終了前にBINを保存してください。</span></footer>
+  </main>
+</body>
+</html>

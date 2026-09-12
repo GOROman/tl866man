@@ -1,0 +1,97 @@
+# TL866man
+
+MiniPRO TL866CS を Mac のブラウザから操作する ROM リーダー。
+Python 標準ライブラリのローカルサーバーが `minipro` CLI を呼び出します。
+
+## 起動
+
+```sh
+brew install minipro
+python3 server.py
+```
+
+http://127.0.0.1:8660 を開きます。ポート変更は `python3 server.py --port 8661`。
+Python 3.9 以降。Web用の追加パッケージ、ビルド、外部サービスは不要です。
+
+## 使い方
+
+1. TL866CS を USB 接続し「再確認」で接続を確認。
+2. チップの印字から型番を検索し、パッケージも一致する候補を選択。
+3. チップのデータシートと MiniPRO の装着指示に従って装着位置・向きを確認し、確認欄をチェック。
+4. 「ROMを読み出す」をクリック。
+5. HEX/ASCII、バイト数、SHA-256、実行ログを確認し「BINを保存」。
+
+一覧は minipro の TL866A/CS データベースです。メモリ以外のデバイスも含まれるため、ROM/EEPROM/Flash の正確な型番を選んでください。自動型番判定・ソケット配置図は未実装です。
+
+## 動作範囲
+
+- 機器確認: `minipro -k`
+- 型番一覧: `minipro -q TL866A -l`
+- 型番情報: `minipro -q TL866A -d 型番`
+- 読み出し: `minipro -p 型番 -c code -r 一時ファイル`
+- コードメモリをBINで読み出します。MCUの設定領域などは対象外。
+- 書き込み・消去・ファームウェア更新・任意のIDチェック回避は公開しません。SC-88Proの専用アダプターフローのみ読み出し時の `-x` を使用します。
+- USB操作は排他制御。読み出しタイムアウトは180秒。
+- 全バイトが同じ場合は注意表示。読み出し完了だけでは内容の正しさは保証されません。
+- 結果は1件のみメモリ保持。次の読み出し開始またはサーバー終了で失われるため先に保存してください。一時BINは処理後に削除。
+- `127.0.0.1` のみにバインド。Host/Origin検査とセッショントークンで他サイトからの読み出し開始を防止。LAN公開用途には対応しません。
+
+実機の読み出しには正確な型番・装着確認が必要です。接続確認とUI確認は、ROM内容の実機検証とは別です。
+
+Backend: [minipro](https://gitlab.com/DavidGriffith/minipro/)
+
+## Roland SC-88Pro PRG ROM (IC26)
+
+サービスノート p.3 / p.12: IC26は8 Mbit（1 MiB）。部品表には μPD27C8000DZ-85（42ピンEPROM）とLH538U0L（FLATマスクROM）が記載されています。
+
+TL866CS / minipro 0.7.4 では両型番の直接対応がありません。名前の似たMX27C8000@DIP32やUPD27C8001@DIP32は代用しないでください。
+
+専用パネルは **27C800系ピン配置と適合確認済みの、27C4096へ変換するバンク切替アダプター** 向けのソフトウェアフローです。単純な42→40ピン変換ではありません。手持ちROM・アダプターでの実機動作は未検証です。LH538U0LはこのDIP42フローの直接対象外です。
+
+1. 基板から取り外したROMとアダプターの適合・向き・27C800用モードを確認。
+2. Bank 0（ROMワードアドレスA18=0）に設定し確認欄をチェックして読み出し。
+3. 完了して「Bank 1の切替待ち」になったらアダプターをBank 1（A18=1）へ切替。スイッチの番号とON/OFFはアダプター依存です。
+4. 再度確認欄をチェックしBank 1を読み出し。512 KiB + 512 KiBの容量を検査し、Bank 0→1の順に結合して `SC-88Pro_PRGROM.bin` を保存。
+
+専用コマンドは `minipro -p AM27C4096@DIP40 -c code -r 一時ファイル -x`。アダプター仕様に従いID検査を省略します。書き込み電圧変更・書き込み・消去は実行しません。両バンクが同一なら切替の未反映を疑う注意を表示します。出力はminiproの生バイト順を保持し、自動バイトスワップはしません。SC-88Pro向けの最終バイト順と内容は実ダンプで検証が必要です。
+
+途中で失敗した場合はBank 0からやり直してください。サーバー再起動で途中データは失われます。取得済みBank 0はBank 1完了までメモリに保持されます。
+
+根拠:
+
+- [Roland SC-88Pro Service Notes (p.3, p.12)](https://www.dosdays.co.uk/media/roland/sc-88/ROLAND_SC-88PRO_SERVICE_NOTES.pdf)
+- [silvervest 27Cxxx adapter](https://github.com/silvervest/TL866-27Cxxx-adapter): 27C4096へ変換、27C800は512 KiB×2バンク。
+- [GG Labs E2R16](https://gglabs.us/node/2311): 読み出しも27C4096・IDチェックなし、A18バンク切替。
+
+## Famicom MMC1: HSP-08-0 PRG
+
+`HSP-08-0 PRG` は、ゲーム「覇邪の封印」のHVC-SLROM-02（MMC1）基板に載るSharp `LH2310 0S` マスクROMです。容量は128 KiB、パッケージはDIP-28です。ROM選択欄に `HSP-08-0 PRG · LH2310 / DIP-28` と入力すると、Web UIにこのピンアサインが表示されます。
+
+切り欠きを上に見たROM側のピン配置:
+
+| Pin | Signal | Pin | Signal |
+| ---: | --- | ---: | --- |
+| 1 | PRG A15 | 15 | PRG D3 |
+| 2 | PRG A12 | 16 | PRG D4 |
+| 3 | PRG A7 | 17 | PRG D5 |
+| 4 | PRG A6 | 18 | PRG D6 |
+| 5 | PRG A5 | 19 | PRG D7 |
+| 6 | PRG A4 | 20 | PRG /CE |
+| 7 | PRG A3 | 21 | PRG A10 |
+| 8 | PRG A2 | 22 | PRG A16 |
+| 9 | PRG A1 | 23 | PRG A11 |
+| 10 | PRG A0 | 24 | PRG A9 |
+| 11 | PRG D0 | 25 | PRG A8 |
+| 12 | PRG D1 | 26 | PRG A13 |
+| 13 | PRG D2 | 27 | PRG A14 |
+| 14 | GND | 28 | +5V |
+
+この配線はNintendo系128 KiB PRGマスクROMのピン配置です。27C010のJEDECピン配置とは異なるため、LH2310をTL866CSのZIFへ直挿ししないでください。ユーザー環境では変換アダプターが未所持のため、現段階ではピン表の表示までを確認済みとし、読み出しは `LH2310 DIP-28 → AM27C010 DIP-32` の信号変換アダプターを用意してから実行します。既製の28→32変換基板を使う場合も、基板の信号表とピン番号を照合してください。
+
+アダプターを用意した後は、ROM選択後に表示されるピン表を確認し、配線確認欄をチェックして読み出します。サーバーはTL866CSに `AM27C010@DIP32` として読み出しを依頼し、取得した128 KiBをそのまま保存します。マッパーMMC1のバンク切替をソフトウェアで行う処理ではありません。CHR ROM（この基板では別の128 KiB ROM）とMMC1 ICは別部品なので、PRG ROMのダンプだけではカートリッジ全体の `.nes` イメージになりません。
+
+根拠:
+
+- [NesCartDB: Haja no Fuuin](https://nescartdb.com/profile/view/1483/haja-no-fuuin): HSP-08-0、HVC-SLROM-02、MMC1、PRG0 LH2310 128 KiB DIP-28。
+- [NESdev: Mask ROM pinout](https://www.nesdev.org/wiki/Mask_ROM_pinout): Nintendo系128/256/512 KiB PRGマスクROMの信号配置。
+- [NESdev: MMC1](https://www.nesdev.org/wiki/INES_Mapper_001): MMC1のSxROM構成とPRG/CHRの役割。

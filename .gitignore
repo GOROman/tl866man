@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+*.bin
+*.rom
+*.log
+.DS_Store
