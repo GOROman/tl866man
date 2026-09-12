@@ -131,6 +131,36 @@
               <div class="wiring-badges"><span class="wire-address">A0–A17</span><span class="wire-data">DQ0–DQ15</span><span class="wire-control">CE# · OE#</span><span class="wire-power">VPP · VCC · VSS</span></div>
             </article>
           </div>
+          <div class="physical-layout" role="img" aria-label="切り欠きを上にした42ピンROMの物理的なピン列">
+            <div class="physical-layout-head"><span>ROM側の並びを基準にする</span><b>PIN 1 SAME SIDE</b></div>
+            <div class="physical-layout-grid">
+              <div class="physical-side physical-left">
+                <div class="physical-pin wire-address"><b>01–02</b><span>A18 · A17</span></div>
+                <div class="physical-pin wire-address"><b>03–10</b><span>A7 · A6 · A5 · A4 · A3 · A2 · A1 · A0</span></div>
+                <div class="physical-pin wire-control"><b>11–13</b><span>CE# · GND · OE#</span></div>
+                <div class="physical-pin wire-data"><b>14–15</b><span>DQ0 · DQ8</span></div>
+                <div class="physical-pin wire-data"><b>16–17</b><span>DQ1 · DQ9</span></div>
+                <div class="physical-pin wire-data"><b>18–19</b><span>DQ2 · DQ10</span></div>
+                <div class="physical-pin wire-data"><b>20–21</b><span>DQ3 · DQ11</span></div>
+              </div>
+              <div class="physical-body">
+                <span class="physical-notch"></span>
+                <div><small>42-PIN ROM</small><strong>μPD27C8000DZ</strong><em>DIP42 · IC26</em></div>
+                <span class="physical-mark physical-mark-top">01</span><span class="physical-mark physical-mark-bottom">21 / 22</span>
+              </div>
+              <div class="physical-side physical-right">
+                <div class="physical-pin wire-power"><b>42</b><span>NC</span></div>
+                <div class="physical-pin wire-address"><b>41–33</b><span>A8 · A9 · A10 · A11 · A12 · A13 · A14 · A15 · A16</span></div>
+                <div class="physical-pin wire-power"><b>32</b><span>BYTE/VPP</span></div>
+                <div class="physical-pin wire-power"><b>31</b><span>GND</span></div>
+                <div class="physical-pin wire-data"><b>30–29</b><span>DQ15 · DQ7</span></div>
+                <div class="physical-pin wire-data"><b>28–25</b><span>DQ14 · DQ6 · DQ13 · DQ5</span></div>
+                <div class="physical-pin wire-data"><b>24–23</b><span>DQ12 · DQ4</span></div>
+                <div class="physical-pin wire-power"><b>22</b><span>VCC</span></div>
+              </div>
+            </div>
+            <p class="physical-layout-note">左列は1番ピンから21番ピン、右列は42番ピンから22番ピン。ソケットをこの向きで置き、A0〜A17／DQ0〜DQ15は信号名でTL866側へ配線します。</p>
+          </div>
           <div class="wiring-map" aria-label="信号の接続一覧">
             <div class="wiring-map-row"><span class="wire-address">ADDRESS</span><strong>A0–A17</strong><b>ROM ↔ TL866</b><small>そのまま接続</small></div>
             <div class="wiring-map-row"><span class="wire-data">DATA</span><strong>DQ0–DQ15</strong><b>ROM ↔ TL866</b><small>そのまま接続</small></div>
