@@ -1,0 +1,109 @@
+diff --git a/src/main.c b/src/main.c
+index 207a385..12274f3 100644
+--- a/src/main.c
++++ b/src/main.c
+@@ -1245,6 +1245,9 @@ int read_page_ram(minipro_handle_t *handle, uint8_t *buf, uint8_t type,
+ 	size_t blocks_count = size / buffer_size;
+ 	if (size % buffer_size)
+ 		blocks_count++;
++	const int stream_code = handle->cmdopts->is_pipe &&
++		handle->cmdopts->action == READ && type == MP_CODE &&
++		handle->cmdopts->format == 0;
+ 
+ 	struct timeval begin, end;
+ 	gettimeofday(&begin, NULL);
+@@ -1273,6 +1276,14 @@ int read_page_ram(minipro_handle_t *handle, uint8_t *buf, uint8_t type,
+ 			fprintf(stderr, "\nOvercurrent protection!\007\n");
+ 			return EXIT_FAILURE;
+ 		}
++		if (stream_code) {
++			size_t chunk_size = size - i * buffer_size;
++			if (chunk_size > buffer_size)
++				chunk_size = buffer_size;
++			if (fwrite(buf + i * buffer_size, 1, chunk_size, stdout) != chunk_size)
++				return EXIT_FAILURE;
++			fflush(stdout);
++		}
+ 	}
+ 	gettimeofday(&end, NULL);
+ 	snprintf(status_msg, sizeof(status_msg), "Reading %s...  %.2fSec  OK",
+@@ -1897,7 +1908,9 @@ int read_page_file(minipro_handle_t *handle, uint8_t type, size_t size)
+ 		}
+ 		break;
+ 	default:
+-		fwrite(buffer, 1, size, file);
++		if (!(handle->cmdopts->is_pipe && type == MP_CODE &&
++		      handle->cmdopts->format == 0))
++			fwrite(buffer, 1, size, file);
+ 	}
+ 
+ 	fclose(file);
+diff --git a/src/prom.c b/src/prom.c
+index 7118eea..63c3c69 100644
+--- a/src/prom.c
++++ b/src/prom.c
+@@ -28,6 +28,29 @@
+ 
+ #define HITACHI_MASK_PROM_MASK 0x80
+ 
++/* TL866man can slow the read-only bit-bang path for marginal sockets. */
++static unsigned int tl866man_read_delay_us(void)
++{
++	static int initialized;
++	static unsigned int delay;
++	if (!initialized) {
++		const char *value = getenv("TL866MAN_READ_DELAY_US");
++		if (value && *value)
++			delay = (unsigned int)strtoul(value, NULL, 10);
++		if (delay > 1000000)
++			delay = 1000000;
++		initialized = 1;
++	}
++	return delay;
++}
++
++static void tl866man_read_delay(void)
++{
++	unsigned int delay = tl866man_read_delay_us();
++	if (delay)
++		usleep(delay);
++}
++
+ typedef struct prom {
+ 	uint8_t *gnd_pins;	/* GND pins list */
+ 	uint8_t *vcc_pins;	/* VCC pins list */
+@@ -162,6 +185,18 @@ static prom_t prom_table[] = {
+ 		  (uint8_t[]){ 8, 7, 6, 5, 4, 3, 2, 1, 23, 22, 19, 18, 21, 0 },
+ 	  .ce_lo_pins = (uint8_t[]){ 20, 0 },
+ 	  .compare_mask = 0xff },
++
++	/* Type 13; 131072x8; DIP28 Nintendo PRG mask ROM (LH2310/HSP-08-0).
++	 * The address and data buses are deliberately listed in logical bit
++	 * order.  This is a read-only PROM profile for direct ZIF insertion;
++	 * the device is not JEDEC-compatible with a 27C010. */
++	{ .gnd_pins = (uint8_t[]){ 14, 0 },
++	  .vcc_pins = (uint8_t[]){ 28, 0 },
++	  .data_bus_pins = (uint8_t[]){ 11, 12, 13, 15, 16, 17, 18, 19, 0 },
++	  .addr_bus_pins =
++		  (uint8_t[]){ 10, 9, 8, 7, 6, 5, 4, 3, 25, 24, 21, 23, 2, 26, 27, 1, 22, 0 },
++	  .ce_lo_pins = (uint8_t[]){ 20, 0 },
++	  .compare_mask = 0xff },
+ };
+ 
+ static mask_prom_t mask_prom_table[] = {
+@@ -361,6 +396,7 @@ static int prom_read_mask_prom(minipro_handle_t *handle, uint32_t address,
+ 			/* Convert zif data bus value and write it to buffer */
+ 			buffer[i] = get_bits(zif, mask_prom_table[type].data_bus_pins,
+ 					     pin_count);
++			tl866man_read_delay();
+ 
+ 			set_bits(zif_state, mask_prom_table[type].ce_pins,
+ 					 ~ce_bit_pattern, pin_count);
+@@ -419,6 +455,7 @@ int prom_read(minipro_handle_t *handle, uint32_t address, uint8_t *buffer,
+ 		/* Convert zif data bus value and write it to buffer */
+ 		buffer[i] = get_bits(zif, prom_table[type].data_bus_pins,
+ 				     pin_count);
++		tl866man_read_delay();
+ 	}
+ 
+ 	/* Set chip enable pins state to disabled */

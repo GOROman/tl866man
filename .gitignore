@@ -4,3 +4,4 @@ __pycache__/
 *.rom
 *.log
 .DS_Store
+.runtime/

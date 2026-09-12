@@ -65,8 +65,17 @@
               </table>
             </div>
             <div id="pinWarnings" class="pin-warnings"></div>
+            <label id="profileDirectLabel" class="confirm" hidden><input id="profileDirectConfirm" type="checkbox">カスタムPROMモードでLH2310をDIP-28の向きどおりにZIFへ直接装着することを確認しました</label>
             <label id="profileAdapterLabel" class="confirm" hidden><input id="profileAdapterConfirm" type="checkbox">LH2310 DIP-28 → AM27C010 DIP-32 の配線アダプターを用意し、上のピン配置と向きを確認しました</label>
           </div>
+          <label for="readSpeed">読み出し速度</label>
+          <select id="readSpeed" class="speed-select" aria-describedby="speedHint">
+            <option value="fast">高速</option>
+            <option value="normal" selected>標準</option>
+            <option value="slow">低速・安定</option>
+            <option value="safe">最低速・検証用</option>
+          </select>
+          <p id="speedHint" class="hint speed-hint">HSP-08-0のカスタムPROMでは1バイト間隔に反映。標準minipro／SC-88Proは本体既定速度です。</p>
           <label class="confirm"><input id="confirm" type="checkbox">選択した型番と、チップの装着位置・向きを確認しました</label>
           <button id="read" class="primary" disabled>↓ ROMを読み出す</button>
           <p class="hint">読み出し専用 · チップの書き込み／消去は行いません</p>
@@ -74,14 +83,116 @@
       </aside>
 
       <div class="content">
+        <section id="pinoutGraphic" class="card pinout-graphic" hidden aria-live="polite">
+          <div class="section-title">
+            <h2><span>ピンアサイン</span><em>GRAPHICAL MAP</em></h2>
+            <div class="pinout-meta"><span id="pinoutMode">CUSTOM PIN MAP</span><span id="pinoutPackage">DIP-28</span></div>
+          </div>
+          <p id="pinoutGraphicNote" class="pinout-graphic-note">切り欠きを上に見たROM側の配置。左は1番ピン側、右は28番ピン側です。</p>
+          <div class="chip-pin-diagram" role="img" aria-label="ROMのグラフィカルなピンアサイン">
+            <div id="pinsLeft" class="pin-side pin-side-left"></div>
+            <div class="chip-body" aria-hidden="true">
+              <span class="chip-notch"></span>
+              <div class="chip-label"><small id="graphicChipType">ROM</small><strong id="graphicChipName">LH2310</strong><span id="graphicReader">DIP-28</span></div>
+              <span class="chip-mark chip-mark-top">1</span><span class="chip-mark chip-mark-bottom">28</span>
+            </div>
+            <div id="pinsRight" class="pin-side pin-side-right"></div>
+          </div>
+          <div class="pin-legend"><span class="legend-address"><i></i>ADDRESS</span><span class="legend-data"><i></i>DATA</span><span class="legend-control"><i></i>CONTROL</span><span class="legend-power"><i></i>POWER</span></div>
+        </section>
+        <section class="card wiring-card" aria-labelledby="wiringTitle">
+          <div class="section-title">
+            <h2><span id="wiringTitle">SC-88Pro 接続図</span><em>READ-ONLY WIRING</em></h2>
+            <span class="profile-tag">42P → 40P</span>
+          </div>
+          <p class="wiring-lede">IC26の42ピンROMを、信号名を合わせて27C4096相当へ変換します。TL866CSへROMを直挿しせず、必ず変換アダプターを間に入れてください。</p>
+          <div class="wiring-flow" role="img" aria-label="SC-88Pro IC26の42ピンROMを27C800から27C4096へ変換してTL866CSで読む接続図">
+            <article class="wiring-node wiring-rom">
+              <div class="wiring-kicker">01 · IC26</div>
+              <h3>μPD27C8000DZ</h3>
+              <p>42-pin · 8 Mbit · 1 MiB</p>
+              <div class="wiring-badges">
+                <span class="wire-address">A0–A18</span><span class="wire-data">DQ0–DQ15</span><span class="wire-control">CE# · OE#</span><span class="wire-power">BYTE/VPP · VCC · GND</span>
+              </div>
+            </article>
+            <div class="wiring-connector" aria-hidden="true"><b>信号名</b><i></i><strong>→</strong><i></i><small>1:1配線</small></div>
+            <article class="wiring-node wiring-adapter">
+              <div class="wiring-kicker">02 · INTERPOSER</div>
+              <h3>27C800 → 27C4096</h3>
+              <p>42-pin socket → 40-pin header</p>
+              <div class="adapter-core"><span>BYTE/VPP = 1</span><b>A18</b><em>0 / 1</em></div>
+              <div class="wiring-badges"><span class="wire-address">A18 BANK SW</span><span class="wire-control">ID CHECK OFF</span></div>
+            </article>
+            <div class="wiring-connector" aria-hidden="true"><b>ZIFへ</b><i></i><strong>→</strong><i></i><small>40-pin</small></div>
+            <article class="wiring-node wiring-reader">
+              <div class="wiring-kicker">03 · PROGRAMMER</div>
+              <h3>TL866CS ZIF</h3>
+              <p>AM27C4096@DIP40 · read</p>
+              <div class="wiring-badges"><span class="wire-address">A0–A17</span><span class="wire-data">DQ0–DQ15</span><span class="wire-control">CE# · OE#</span><span class="wire-power">VPP · VCC · VSS</span></div>
+            </article>
+          </div>
+          <div class="wiring-map" aria-label="信号の接続一覧">
+            <div class="wiring-map-row"><span class="wire-address">ADDRESS</span><strong>A0–A17</strong><b>ROM ↔ TL866</b><small>そのまま接続</small></div>
+            <div class="wiring-map-row"><span class="wire-data">DATA</span><strong>DQ0–DQ15</strong><b>ROM ↔ TL866</b><small>そのまま接続</small></div>
+            <div class="wiring-map-row"><span class="wire-control">CONTROL</span><strong>CE# · OE#</strong><b>ROM ↔ TL866</b><small>アクティブLow</small></div>
+            <div class="wiring-map-row"><span class="wire-address">BANK</span><strong>A18</strong><b>スイッチ</b><small>0 = Bank 0 / 1 = Bank 1</small></div>
+            <div class="wiring-map-row"><span class="wire-power">POWER</span><strong>BYTE/VPP · VCC · GND</strong><b>アダプター経由</b><small>5V読み出し条件を照合</small></div>
+          </div>
+          <details class="wiring-detail">
+            <summary>42ピン → 40ピンの対応を表示</summary>
+            <div class="wiring-detail-scroll">
+              <table>
+                <thead><tr><th>ROM pin</th><th>信号</th><th>TL866 pin</th><th>ROM pin</th><th>信号</th><th>TL866 pin</th></tr></thead>
+                <tbody>
+                  <tr><td>01</td><td>A18</td><td class="wire-address">BANK SW</td><td>42</td><td>NC</td><td>—</td></tr>
+                  <tr><td>02</td><td>A17</td><td>39</td><td>41</td><td>A8</td><td>29</td></tr>
+                  <tr><td>03</td><td>A7</td><td>28</td><td>40</td><td>A9</td><td>31</td></tr>
+                  <tr><td>04</td><td>A6</td><td>27</td><td>39</td><td>A10</td><td>32</td></tr>
+                  <tr><td>05</td><td>A5</td><td>26</td><td>38</td><td>A11</td><td>33</td></tr>
+                  <tr><td>06</td><td>A4</td><td>25</td><td>37</td><td>A12</td><td>34</td></tr>
+                  <tr><td>07</td><td>A3</td><td>24</td><td>36</td><td>A13</td><td>35</td></tr>
+                  <tr><td>08</td><td>A2</td><td>23</td><td>35</td><td>A14</td><td>36</td></tr>
+                  <tr><td>09</td><td>A1</td><td>22</td><td>34</td><td>A15</td><td>37</td></tr>
+                  <tr><td>10</td><td>A0</td><td>21</td><td>33</td><td>A16</td><td>38</td></tr>
+                  <tr><td>11</td><td>CE#</td><td>02</td><td>32</td><td>BYTE/VPP</td><td>01 VPP</td></tr>
+                  <tr><td>12</td><td>GND</td><td>11/30 VSS</td><td>31</td><td>GND</td><td>11/30 VSS</td></tr>
+                  <tr><td>13</td><td>OE#</td><td>20</td><td>30</td><td>DQ15</td><td>03</td></tr>
+                  <tr><td>14</td><td>DQ0</td><td>19</td><td>29</td><td>DQ7</td><td>12</td></tr>
+                  <tr><td>15</td><td>DQ8</td><td>10</td><td>28</td><td>DQ14</td><td>04</td></tr>
+                  <tr><td>16</td><td>DQ1</td><td>18</td><td>27</td><td>DQ6</td><td>13</td></tr>
+                  <tr><td>17</td><td>DQ9</td><td>09</td><td>26</td><td>DQ13</td><td>05</td></tr>
+                  <tr><td>18</td><td>DQ2</td><td>17</td><td>25</td><td>DQ5</td><td>14</td></tr>
+                  <tr><td>19</td><td>DQ10</td><td>08</td><td>24</td><td>DQ12</td><td>06</td></tr>
+                  <tr><td>20</td><td>DQ3</td><td>16</td><td>23</td><td>DQ4</td><td>15</td></tr>
+                  <tr><td>21</td><td>DQ11</td><td>07</td><td>22</td><td>VCC</td><td>40 VCC</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <p class="wiring-detail-note">表は27C800を16-bitモードで27C4096相当に見せる読み出し配線です。ピン1の向き、BYTE/VPPの電位、A18スイッチの0/1を実部品のデータシートで照合してください。</p>
+          </details>
+          <div class="bank-flow">
+            <div class="bank-step"><span>READ 01</span><strong>Bank 0</strong><b>A18 = 0</b><small>512 KiBを保存</small></div>
+            <div class="bank-arrow" aria-hidden="true">→</div>
+            <div class="bank-step"><span>SWITCH</span><strong>A18</strong><b>0 → 1</b><small>ROMを抜かずに切替</small></div>
+            <div class="bank-arrow" aria-hidden="true">→</div>
+            <div class="bank-step"><span>READ 02</span><strong>Bank 1</strong><b>A18 = 1</b><small>512 KiBを結合</small></div>
+          </div>
+          <div class="wiring-warning"><b>!</b><p>42ピンROMのピン番号を40ピンZIFへ機械的に重ねないでください。ROMのデータシートとアダプターの回路図を照合し、最初は読み出し専用・IDチェックOFFで確認します。</p></div>
+        </section>
         <section class="card viewer">
-          <div class="section-title"><h2>03 <span>メモリビュー</span><em>MEMORY INSPECTOR</em></h2><a id="download" class="download" href="/api/download" hidden>↓ BINを保存</a></div>
+          <div class="section-title"><h2>03 <span>メモリビュー</span><em>MEMORY INSPECTOR</em></h2><div class="viewer-actions"><button id="cancel" class="cancel" hidden>■ 読み出しをキャンセル</button><button id="clear" class="clear" disabled>× クリア</button><a id="download" class="download" href="/api/download" hidden>↓ BINを保存</a></div></div>
           <div class="metrics"><div><span>CHIP</span><strong id="resultChip">—</strong></div><div><span>SIZE</span><strong id="size">—</strong></div><div><span>READ TIME</span><strong id="duration">—</strong></div></div>
+          <div id="progressPanel" class="progress-panel" hidden>
+            <div class="progress-head"><span id="progressLabel">READING ROM</span><strong id="progressValue">0%</strong></div>
+            <div class="progress-track"><i id="progressFill"></i></div>
+            <div class="progress-meta"><span id="progressBytes">0 / — bytes</span><span id="progressHint">読み出し中…</span></div>
+          </div>
           <div id="empty">
             <div class="memory-art" aria-hidden="true"><div class="orbit orbit-one"></div><div class="orbit orbit-two"></div><div class="chip-art"><div class="chip-core"><span>ROM</span><b>0x<span>00</span></b><small>AWAITING INPUT</small></div></div><span class="art-cross cross-one">+</span><span class="art-cross cross-two">+</span></div>
             <p class="empty-kicker">READY WHEN YOU ARE</p><h3>すべては、最初の1バイトから。</h3><p>チップの型番を選んで読み出しを開始。<br>ここにメモリの内容が表示されます。</p><div class="empty-formats"><span>HEX</span><span>ASCII</span><span>BINARY</span></div>
           </div>
           <div id="hexPanel" hidden>
+            <p id="partialNote" class="partial-note" hidden>途中ダンプ · 読み出し中のため内容は変化します</p>
             <div class="hex-head">ADDRESS&nbsp;&nbsp;&nbsp; 00 01 02 03 04 05 06 07 08 09 0A 0B 0C 0D 0E 0F&nbsp; ASCII</div>
             <pre id="hex"></pre>
             <div class="paging"><button id="prev">← 前へ</button><span id="range"></span><button id="next">次へ →</button></div>
