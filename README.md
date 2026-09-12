@@ -3,6 +3,8 @@
 MiniPRO TL866CS を Mac のブラウザから操作する ROM リーダー。
 Python 標準ライブラリのローカルサーバーが `minipro` CLI を呼び出します。
 
+![TL866man Web UI](docs/tl866man-webui.png)
+
 ## 起動
 
 ```sh
